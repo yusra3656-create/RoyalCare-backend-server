@@ -21,7 +21,7 @@ app.use(cors());
 app.use(express.json());
 
 // =========================
-//  ROOT ROUTE (IMPORTANT)
+//  ROOT ROUTE
 // =========================
 app.get("/", (req, res) => {
   res.json({
@@ -85,16 +85,18 @@ app.post("/auth/login", async (req, res) => {
 });
 
 // =========================
-//  GET DEVICES (BY DEPARTMENT)
+//  GET DEVICES (CORRECT LOGIC)
 // =========================
 app.get("/devices", async (req, res) => {
   try {
-    const { department } = req.query;
+    const role = req.headers["x-role"];
+    const department = req.query.department;
 
     let q = "SELECT * FROM devices";
     let p = [];
 
-    if (department) {
+    // 🔑 فقط غير الأدمن يتم تقييده بالقسم
+    if (role !== "admin" && department) {
       q += " WHERE department=$1";
       p.push(department);
     }
@@ -238,8 +240,6 @@ app.post("/devices/:id/upload", upload.array("files", 10), async (req, res) => {
 // =========================
 //  FAULTS (ROLE BASED)
 // =========================
-
-// ADD FAULT (ANY USER)
 app.post("/faults", async (req, res) => {
   const { device_id, description } = req.body;
   const userId = req.headers["x-user-id"];
@@ -260,7 +260,6 @@ app.post("/faults", async (req, res) => {
   res.json(r.rows[0]);
 });
 
-// GET FAULTS
 app.get("/faults", async (req, res) => {
   const role = req.headers["x-role"];
   const userId = req.headers["x-user-id"];
@@ -274,9 +273,6 @@ app.get("/faults", async (req, res) => {
   let p = [];
 
   if (role !== "admin") {
-    if (!userId) {
-      return res.status(400).json({ error: "x-user-id required" });
-    }
     q += " WHERE f.user_id=$1";
     p.push(userId);
   }
@@ -285,19 +281,6 @@ app.get("/faults", async (req, res) => {
 
   const r = await pool.query(q, p);
   res.json(r.rows);
-});
-
-// DELETE FAULT (ADMIN)
-app.delete("/faults/:id", async (req, res) => {
-  if (req.headers["x-role"] !== "admin") {
-    return res.status(403).json({ error: "Permission denied" });
-  }
-
-  await pool.query("DELETE FROM fault_reports WHERE id=$1", [
-    req.params.id,
-  ]);
-
-  res.json({ message: "Fault deleted" });
 });
 
 // =========================
